@@ -48,7 +48,7 @@ export default function LayoutProvider({
         {/* <main className="flex flex-1 flex-col">{children}</main> */}
         <div className="flex  w-full">
           <Sidebar /> 
-          <main className="flex flex-1 flex-col">{children}</main>
+          <main className="flex flex-1 flex-col max-h-[calc(100vh-100px)]">{children}</main>
         </div>
         {/* <main className="flex flex-1 flex-col">{children}</main> */}
       </div>
