@@ -8,6 +8,8 @@ import "./Modal.css";
 export interface ModalProps {
   open: boolean;
   onClose: () => void;
+  /** Fired after the close animation has fully completed. */
+  onExited?: () => void;
   size?: "sm" | "md" | "lg" | "xl" | "fullscreen";
   title?: ReactNode;
   hideCloseButton?: boolean;
@@ -22,6 +24,7 @@ const ANIMATION_MS = 250;
 export default function Modal({
   open,
   onClose,
+  onExited,
   size = "md",
   title,
   hideCloseButton = false,
@@ -30,26 +33,36 @@ export default function Modal({
   footer,
   children,
 }: ModalProps) {
-  const [mounted, setMounted] = useState(false);
+  const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
   const [closing, setClosing] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const onExitedRef = useRef(onExited);
+
+  useEffect(() => {
+    onExitedRef.current = onExited;
+  }, [onExited]);
 
   useEffect(() => {
     if (open) {
       setMounted(true);
-      requestAnimationFrame(() => {
+      setClosing(false);
+      const id = requestAnimationFrame(() => {
         requestAnimationFrame(() => setVisible(true));
       });
-    } else if (mounted) {
-      setClosing(true);
-      setVisible(false);
-      const timer = setTimeout(() => {
-        setMounted(false);
-        setClosing(false);
-      }, ANIMATION_MS);
-      return () => clearTimeout(timer);
+      return () => cancelAnimationFrame(id);
     }
+
+    setClosing(true);
+    setVisible(false);
+
+    const timer = setTimeout(() => {
+      setMounted(false);
+      setClosing(false);
+      onExitedRef.current?.();
+    }, ANIMATION_MS);
+
+    return () => clearTimeout(timer);
   }, [open]);
 
   useEffect(() => {
@@ -66,13 +79,13 @@ export default function Modal({
   }, [open, closeOnEscape, onClose]);
 
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-    }
+    if (!mounted) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = previous;
     };
-  }, [open]);
+  }, [mounted]);
 
   useEffect(() => {
     if (visible && panelRef.current) {

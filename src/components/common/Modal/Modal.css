@@ -6,9 +6,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background-color: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(3px);
   opacity: 0;
   transition:
     opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);

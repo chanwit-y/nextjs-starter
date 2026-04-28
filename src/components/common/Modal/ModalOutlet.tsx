@@ -1,57 +1,42 @@
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Modal from "./Modal";
 import { useModal, type ModalEntry } from "./ModalContext";
 
 export default function ModalOutlet() {
   const { modals, closeModal } = useModal();
-  const [closingIds, setClosingIds] = useState<Set<string>>(new Set());
-  const [rendered, setRendered] = useState<ModalEntry[]>([]);
+  const [renderedModals, setRenderedModals] = useState<ModalEntry[]>([]);
 
   useEffect(() => {
-    const currentIds = new Set(modals.map((m) => m.id));
-    const removed = rendered.filter((m) => !currentIds.has(m.id));
-
-    if (removed.length > 0) {
-      setClosingIds((prev) => {
-        const next = new Set(prev);
-        removed.forEach((m) => next.add(m.id));
-        return next;
-      });
-
-      const timer = setTimeout(() => {
-        setClosingIds((prev) => {
-          const next = new Set(prev);
-          removed.forEach((m) => next.delete(m.id));
-          return next;
-        });
-        setRendered(modals);
-      }, 260);
-
-      return () => clearTimeout(timer);
-    }
-
-    setRendered(modals);
+    setRenderedModals((prev) => {
+      const merged = [...prev];
+      for (const modal of modals) {
+        const existingIdx = merged.findIndex((m) => m.id === modal.id);
+        if (existingIdx === -1) {
+          merged.push(modal);
+        } else {
+          merged[existingIdx] = modal;
+        }
+      }
+      return merged;
+    });
   }, [modals]);
 
-  const handleClose = useCallback(
-    (id: string) => {
-      closeModal(id);
-    },
-    [closeModal],
-  );
+  const handleExited = useCallback((id: string) => {
+    setRenderedModals((prev) => prev.filter((m) => m.id !== id));
+  }, []);
 
-  const all = [...rendered, ...modals.filter((m) => !rendered.some((r) => r.id === m.id))];
-  const unique = all.filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i);
+  const isOpenInContext = (id: string) => modals.some((m) => m.id === id);
 
   return (
     <>
-      {unique.map((modal) => (
+      {renderedModals.map((modal) => (
         <Modal
           key={modal.id}
-          open={!closingIds.has(modal.id) && modals.some((m) => m.id === modal.id)}
-          onClose={() => handleClose(modal.id)}
+          open={isOpenInContext(modal.id)}
+          onClose={() => closeModal(modal.id)}
+          onExited={() => handleExited(modal.id)}
           size={modal.size}
           title={modal.title}
           hideCloseButton={modal.hideCloseButton}
