@@ -5,6 +5,7 @@ import Flex from "@/components/common/Flex/Flex";
 import Radio from "@/components/common/Radio/Radio";
 
 import Counter from "@/components/Counter";
+import ModalDemo from "@/components/ModalDemo";
 
 import Paper from "@/components/common/Paper/Paper";
 import TextField from "@/components/common/TextField/TextField";
@@ -24,6 +25,8 @@ export default function Home() {
         </div>
 
         <Counter />
+
+        <ModalDemo />
 
         <p className="text-sm text-muted-foreground">
           Edit{" "}
