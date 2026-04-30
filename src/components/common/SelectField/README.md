@@ -1,6 +1,6 @@
 # SelectField
 
-A form select component for choosing from a list of options, inspired by Material UI's Select.
+A form select component for choosing from a list of options, inspired by Material UI's Select. It uses a custom button + portal-based dropdown panel (the same look-and-feel as `Autocomplete`) so the option list can be styled consistently across the app.
 
 ## Import
 
@@ -108,27 +108,17 @@ Change the focus/active color.
 
 ## Controlled
 
+The `onChange` callback receives the selected `value` directly (or `null` when cleared), matching the `Autocomplete` API.
+
 ```tsx
-const [value, setValue] = useState("");
+const [value, setValue] = useState<string | number | null>(null);
 
 <SelectField
   label="Controlled"
   value={value}
-  onChange={(e) => setValue(e.target.value)}
+  onChange={(next) => setValue(next)}
   options={options}
 />
-```
-
-## Using Children Instead of Options
-
-You can pass `<option>` elements as children instead of the `options` prop.
-
-```tsx
-<SelectField label="Fruit">
-  <option value="apple">Apple</option>
-  <option value="banana">Banana</option>
-  <option value="cherry">Cherry</option>
-</SelectField>
 ```
 
 ## Combining Variants, Sizes, and Adornments
@@ -149,16 +139,16 @@ You can pass `<option>` elements as children instead of the `options` prop.
 />
 ```
 
-## Custom Styles and HTML Attributes
+## Custom Styles and Form Submission
 
-SelectField accepts all standard `select` attributes (`className`, `style`, `name`, `autoComplete`, `multiple`, etc.) and supports `ref` forwarding.
+`SelectField` forwards `ref` to the underlying trigger button. Pass `name` to render a hidden input so the value is included in form submissions.
 
 ```tsx
 <SelectField
   label="Custom"
   className="my-select"
-  style={{ maxWidth: 300 }}
-  name="custom"
+  name="role"
+  options={options}
 />
 ```
 
@@ -174,11 +164,17 @@ SelectField accepts all standard `select` attributes (`className`, `style`, `nam
 | `error` | `boolean` | `false` | Applies error styling |
 | `fullWidth` | `boolean` | `false` | Takes the full container width |
 | `startAdornment` | `ReactNode` | — | Element at the start of the select |
-| `options` | `SelectOption[]` | — | Options to render in the dropdown |
-| `placeholder` | `string` | — | Placeholder shown as first disabled option |
+| `options` | `SelectOption[]` | `[]` | Options to render in the dropdown |
+| `value` | `string \| number \| null` | — | Controlled selected value |
+| `defaultValue` | `string \| number \| null` | — | Initial value when uncontrolled |
+| `placeholder` | `string` | — | Placeholder shown when no option is selected |
 | `disabled` | `boolean` | `false` | Disables the field |
 | `required` | `boolean` | `false` | Marks the field as required |
-| `children` | `ReactNode` | — | Raw `<option>` elements (alternative to `options` prop) |
+| `name` | `string` | — | If provided, a hidden input is rendered for form submission |
+| `usePortal` | `boolean` | `true` | Render the dropdown into `document.body` via a portal |
+| `maxDropdownHeight` | `number` | `280` | Maximum dropdown height in pixels |
+| `onChange` | `(value: string \| number \| null) => void` | — | Called when the selection changes |
+| `onBlur` | `() => void` | — | Called after the dropdown is closed |
 
 ### SelectOption
 

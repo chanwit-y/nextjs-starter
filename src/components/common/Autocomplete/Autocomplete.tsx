@@ -12,26 +12,28 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { Check } from "lucide-react";
-import "./SelectField.css";
+import { AlertCircle, Check, ChevronDown, Loader2, Search, X } from "lucide-react";
+import "./Autocomplete.css";
 
 type Variant = "outlined" | "filled" | "standard";
 type Size = "small" | "medium";
 type Color = "primary" | "secondary" | "error";
 
-export type SelectOption = {
+export type AutocompleteOption = {
   /** Underlying value used for selection. */
   value: string | number;
   /** Display node rendered in the trigger and option list. */
   label: ReactNode;
-  /** If true, the option is disabled. */
+  /** Optional plain string used for filtering when label is non-string. */
+  searchText?: string;
+  /** Disable selection of this option. */
   disabled?: boolean;
 };
 
-export type SelectFieldProps = {
-  /** Visual variant of the select field. */
+export type AutocompleteProps = {
+  /** Visual variant of the trigger field. */
   variant?: Variant;
-  /** Size of the select field. */
+  /** Size of the trigger field. */
   size?: Size;
   /** Theme color applied on focus. */
   color?: Color;
@@ -39,20 +41,28 @@ export type SelectFieldProps = {
   label?: ReactNode;
   /** Helper text displayed below the field. */
   helperText?: ReactNode;
+  /** Message shown in place of helperText when error is true. */
+  errorMessage?: ReactNode;
   /** If true, the field is styled in an error state. */
   error?: boolean;
-  /** If true, the select takes the full width of its container. */
+  /** If true, the field takes the full width of its container. */
   fullWidth?: boolean;
-  /** Element placed at the start of the select. */
-  startAdornment?: ReactNode;
   /** Options to display in the dropdown list. */
-  options?: SelectOption[];
+  options: AutocompleteOption[];
   /** Controlled selected value. */
   value?: string | number | null;
   /** Initial value when uncontrolled. */
   defaultValue?: string | number | null;
   /** Placeholder shown when no option is selected. */
   placeholder?: string;
+  /** Placeholder text for the dropdown search input. */
+  searchPlaceholder?: string;
+  /** Empty-state node when filter yields no matches. */
+  noResultsText?: ReactNode;
+  /** Loading-state node when loading is true. */
+  loadingText?: ReactNode;
+  /** Show a loading indicator and override empty state. */
+  loading?: boolean;
   /** Disable the trigger. */
   disabled?: boolean;
   /** Mark field as required (renders a "*" near the label). */
@@ -61,7 +71,7 @@ export type SelectFieldProps = {
   className?: string;
   /** DOM id forwarded to the trigger button. */
   id?: string;
-  /** Form name. Renders a hidden input so the value is included in form submissions. */
+  /** Form name. */
   name?: string;
   /** Render the dropdown into document.body via a portal. Defaults to true. */
   usePortal?: boolean;
@@ -69,44 +79,58 @@ export type SelectFieldProps = {
   maxDropdownHeight?: number;
   /** Called when the selection changes. Receives null when cleared. */
   onChange?: (value: string | number | null) => void;
+  /** Called when the search query inside the dropdown changes. */
+  onSearchChange?: (query: string) => void;
   /** Called after the dropdown is closed. */
   onBlur?: () => void;
 };
 
 const VARIANT_CLASS: Record<Variant, string> = {
-  outlined: "mui-selectfield-outlined",
-  filled: "mui-selectfield-filled",
-  standard: "mui-selectfield-standard",
+  outlined: "mui-autocomplete-outlined",
+  filled: "mui-autocomplete-filled",
+  standard: "mui-autocomplete-standard",
 };
 
 const SIZE_CLASS: Record<Size, string> = {
-  small: "mui-selectfield-small",
-  medium: "mui-selectfield-medium",
+  small: "mui-autocomplete-small",
+  medium: "mui-autocomplete-medium",
 };
 
 const COLOR_CLASS: Record<Color, string> = {
-  primary: "mui-selectfield-color-primary",
-  secondary: "mui-selectfield-color-secondary",
-  error: "mui-selectfield-color-error",
+  primary: "mui-autocomplete-color-primary",
+  secondary: "mui-autocomplete-color-secondary",
+  error: "mui-autocomplete-color-error",
 };
 
 const DEFAULT_DROPDOWN_HEIGHT = 280;
 
-const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
-  function SelectField(
+const optionSearchString = (opt: AutocompleteOption): string => {
+  if (opt.searchText) return opt.searchText;
+  if (typeof opt.label === "string" || typeof opt.label === "number") {
+    return String(opt.label);
+  }
+  return String(opt.value);
+};
+
+const Autocomplete = forwardRef<HTMLButtonElement, AutocompleteProps>(
+  function Autocomplete(
     {
       variant = "outlined",
       size = "medium",
       color = "primary",
       label,
       helperText,
+      errorMessage,
       error,
       fullWidth,
-      startAdornment,
-      options = [],
+      options,
       value,
       defaultValue,
       placeholder,
+      searchPlaceholder = "Type to search...",
+      noResultsText = "No results found",
+      loadingText = "Loading...",
+      loading = false,
       disabled,
       required,
       className = "",
@@ -115,6 +139,7 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
       usePortal = true,
       maxDropdownHeight = DEFAULT_DROPDOWN_HEIGHT,
       onChange,
+      onSearchChange,
       onBlur,
     },
     ref,
@@ -132,11 +157,13 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
 
     const [isOpen, setIsOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
+    const [query, setQuery] = useState("");
     const [activeIndex, setActiveIndex] = useState(-1);
     const [dropdownStyles, setDropdownStyles] = useState<CSSProperties>({});
 
     const triggerRef = useRef<HTMLButtonElement | null>(null);
     const dropdownRef = useRef<HTMLDivElement | null>(null);
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
 
     useEffect(() => {
       setMounted(true);
@@ -155,6 +182,14 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
       [ref],
     );
 
+    const filteredOptions = useMemo(() => {
+      const trimmed = query.trim().toLowerCase();
+      if (!trimmed) return options;
+      return options.filter((opt) =>
+        optionSearchString(opt).toLowerCase().includes(trimmed),
+      );
+    }, [options, query]);
+
     const selectedOption = useMemo(
       () =>
         currentValue == null
@@ -165,15 +200,8 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
       [options, currentValue],
     );
 
-    const selectedIndex = useMemo(
-      () =>
-        currentValue == null
-          ? -1
-          : options.findIndex(
-              (opt) => String(opt.value) === String(currentValue),
-            ),
-      [options, currentValue],
-    );
+    const hasError = !!error && !!errorMessage;
+    const displayHelperText = hasError ? errorMessage : helperText;
 
     const computeDropdownStyles = useCallback(() => {
       if (!triggerRef.current) return;
@@ -210,6 +238,7 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
 
     const closeDropdown = useCallback(() => {
       setIsOpen(false);
+      setQuery("");
       setActiveIndex(-1);
       onBlur?.();
     }, [onBlur]);
@@ -218,8 +247,11 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
       if (disabled) return;
       computeDropdownStyles();
       setIsOpen(true);
-      setActiveIndex(selectedIndex);
-    }, [computeDropdownStyles, disabled, selectedIndex]);
+      setActiveIndex(-1);
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 0);
+    }, [computeDropdownStyles, disabled]);
 
     const toggleDropdown = useCallback(() => {
       if (isOpen) {
@@ -240,10 +272,11 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
     );
 
     const handleSelect = useCallback(
-      (option: SelectOption) => {
+      (option: AutocompleteOption) => {
         if (option.disabled) return;
         commitValue(option.value);
         setIsOpen(false);
+        setQuery("");
         setActiveIndex(-1);
         onBlur?.();
         triggerRef.current?.focus();
@@ -251,79 +284,82 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
       [commitValue, onBlur],
     );
 
-    const moveActive = useCallback(
-      (direction: 1 | -1) => {
-        if (options.length === 0) {
-          setActiveIndex(-1);
-          return;
-        }
-        setActiveIndex((prev) => {
-          const total = options.length;
-          let next = prev;
-          for (let i = 0; i < total; i += 1) {
-            next =
-              direction === 1
-                ? next < total - 1
-                  ? next + 1
-                  : 0
-                : next > 0
-                  ? next - 1
-                  : total - 1;
-            if (!options[next]?.disabled) return next;
-          }
-          return prev;
-        });
+    const handleClear = useCallback(
+      (e: React.MouseEvent) => {
+        e.stopPropagation();
+        commitValue(null);
+        setQuery("");
       },
-      [options],
+      [commitValue],
     );
 
-    const handleKeyDown = useCallback(
+    const handleSearchChange = useCallback(
+      (e: React.ChangeEvent<HTMLInputElement>) => {
+        const next = e.target.value;
+        setQuery(next);
+        onSearchChange?.(next);
+      },
+      [onSearchChange],
+    );
+
+    const handleTriggerKeyDown = useCallback(
       (e: React.KeyboardEvent<HTMLButtonElement>) => {
         if (disabled) return;
         if (!isOpen) {
-          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
             e.preventDefault();
             openDropdown();
           }
           return;
         }
+      },
+      [disabled, isOpen, openDropdown],
+    );
+
+    const handleSearchKeyDown = useCallback(
+      (e: React.KeyboardEvent<HTMLInputElement>) => {
         switch (e.key) {
           case "ArrowDown":
             e.preventDefault();
-            moveActive(1);
+            setActiveIndex((prev) =>
+              filteredOptions.length === 0
+                ? -1
+                : prev < filteredOptions.length - 1
+                  ? prev + 1
+                  : 0,
+            );
             break;
           case "ArrowUp":
             e.preventDefault();
-            moveActive(-1);
+            setActiveIndex((prev) =>
+              filteredOptions.length === 0
+                ? -1
+                : prev > 0
+                  ? prev - 1
+                  : filteredOptions.length - 1,
+            );
             break;
-          case "Enter":
-          case " ": {
+          case "Enter": {
             e.preventDefault();
             const target =
-              activeIndex >= 0 ? options[activeIndex] : undefined;
+              activeIndex >= 0 ? filteredOptions[activeIndex] : undefined;
             if (target) handleSelect(target);
             break;
           }
           case "Escape":
             e.preventDefault();
             closeDropdown();
+            triggerRef.current?.focus();
             break;
           case "Tab":
             closeDropdown();
             break;
         }
       },
-      [
-        disabled,
-        isOpen,
-        openDropdown,
-        moveActive,
-        options,
-        activeIndex,
-        handleSelect,
-        closeDropdown,
-      ],
+      [activeIndex, filteredOptions, handleSelect, closeDropdown],
     );
+
+    useEffect(() => setActiveIndex(-1), [query]);
 
     useEffect(() => {
       if (!isOpen) return;
@@ -353,17 +389,16 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
     const shrinkLabel = true;
 
     const rootClasses = [
-      "mui-selectfield",
+      "mui-autocomplete",
       VARIANT_CLASS[variant],
       SIZE_CLASS[size],
       COLOR_CLASS[error ? "error" : color],
-      isOpen ? "mui-selectfield-focused" : "",
-      disabled ? "mui-selectfield-disabled" : "",
-      error ? "mui-selectfield-error" : "",
-      fullWidth ? "mui-selectfield-fullwidth" : "",
-      shrinkLabel ? "mui-selectfield-label-shrink" : "",
-      label ? "" : "mui-selectfield-no-label",
-      startAdornment ? "mui-selectfield-has-start" : "",
+      isOpen ? "mui-autocomplete-focused" : "",
+      disabled ? "mui-autocomplete-disabled" : "",
+      error ? "mui-autocomplete-error" : "",
+      fullWidth ? "mui-autocomplete-fullwidth" : "",
+      shrinkLabel ? "mui-autocomplete-label-shrink" : "",
+      label ? "" : "mui-autocomplete-no-label",
       className,
     ]
       .filter(Boolean)
@@ -372,31 +407,65 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
     const dropdown = isOpen ? (
       <div
         ref={dropdownRef}
-        className="mui-selectfield-dropdown"
+        className="mui-autocomplete-dropdown"
         style={dropdownStyles}
         role="presentation"
       >
+        <div className="mui-autocomplete-search">
+          <Search className="mui-autocomplete-search-icon" aria-hidden />
+          <input
+            ref={searchInputRef}
+            type="text"
+            className="mui-autocomplete-search-input"
+            value={query}
+            onChange={handleSearchChange}
+            onKeyDown={handleSearchKeyDown}
+            placeholder={searchPlaceholder}
+            aria-controls={listboxId}
+            aria-autocomplete="list"
+          />
+          {query && (
+            <button
+              type="button"
+              className="mui-autocomplete-search-clear"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+            >
+              <X size={14} aria-hidden />
+            </button>
+          )}
+        </div>
+
         <ul
           id={listboxId}
           role="listbox"
-          className="mui-selectfield-listbox"
-          style={{ maxHeight: maxDropdownHeight }}
+          className="mui-autocomplete-listbox"
+          style={{ maxHeight: maxDropdownHeight - 48 }}
         >
-          {options.length === 0 ? (
-            <li className="mui-selectfield-state-row mui-selectfield-empty">
-              No options
+          {loading ? (
+            <li className="mui-autocomplete-state-row">
+              <Loader2
+                className="mui-autocomplete-spinner"
+                size={16}
+                aria-hidden
+              />
+              <span>{loadingText}</span>
+            </li>
+          ) : filteredOptions.length === 0 ? (
+            <li className="mui-autocomplete-state-row mui-autocomplete-empty">
+              {noResultsText}
             </li>
           ) : (
-            options.map((opt, index) => {
+            filteredOptions.map((opt, index) => {
               const isActive = index === activeIndex;
               const isSelected =
                 currentValue != null &&
                 String(currentValue) === String(opt.value);
               const optionClasses = [
-                "mui-selectfield-option",
-                isActive ? "mui-selectfield-option-active" : "",
-                isSelected ? "mui-selectfield-option-selected" : "",
-                opt.disabled ? "mui-selectfield-option-disabled" : "",
+                "mui-autocomplete-option",
+                isActive ? "mui-autocomplete-option-active" : "",
+                isSelected ? "mui-autocomplete-option-selected" : "",
+                opt.disabled ? "mui-autocomplete-option-disabled" : "",
               ]
                 .filter(Boolean)
                 .join(" ");
@@ -414,12 +483,12 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
                     handleSelect(opt);
                   }}
                 >
-                  <span className="mui-selectfield-option-label">
+                  <span className="mui-autocomplete-option-label">
                     {opt.label}
                   </span>
                   {isSelected && (
                     <Check
-                      className="mui-selectfield-option-check"
+                      className="mui-autocomplete-option-check"
                       size={16}
                       aria-hidden
                     />
@@ -434,86 +503,110 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
 
     return (
       <div className={rootClasses}>
-        <div className="mui-selectfield-input-wrapper">
+        <div className="mui-autocomplete-input-wrapper">
           {label && (
-            <label htmlFor={triggerId} className="mui-selectfield-label">
+            <label
+              htmlFor={triggerId}
+              className="mui-autocomplete-label"
+            >
               {label}
               {required && <span aria-hidden> *</span>}
             </label>
           )}
 
-          {startAdornment && (
-            <span className="mui-selectfield-adornment mui-selectfield-adornment-start">
-              {startAdornment}
-            </span>
-          )}
+          <span className="mui-autocomplete-adornment mui-autocomplete-adornment-start">
+            <Search size={16} aria-hidden />
+          </span>
 
           <button
             ref={setTriggerRef}
             id={triggerId}
+            name={name}
             type="button"
             role="combobox"
             aria-haspopup="listbox"
             aria-expanded={isOpen}
             aria-controls={isOpen ? listboxId : undefined}
-            aria-describedby={helperText ? helperId : undefined}
+            aria-describedby={displayHelperText ? helperId : undefined}
             aria-invalid={error || undefined}
-            aria-required={required || undefined}
             disabled={disabled}
-            className="mui-selectfield-select"
+            className="mui-autocomplete-trigger"
             onClick={toggleDropdown}
-            onKeyDown={handleKeyDown}
+            onKeyDown={handleTriggerKeyDown}
           >
             <span
               className={
                 selectedOption
-                  ? "mui-selectfield-value"
-                  : "mui-selectfield-placeholder"
+                  ? "mui-autocomplete-value"
+                  : "mui-autocomplete-placeholder"
               }
             >
               {selectedOption ? selectedOption.label : placeholder ?? ""}
             </span>
           </button>
 
-          {name && (
-            <input
-              type="hidden"
-              name={name}
-              value={currentValue == null ? "" : String(currentValue)}
+          <span className="mui-autocomplete-adornment mui-autocomplete-adornment-end">
+            {loading && (
+              <Loader2
+                className="mui-autocomplete-spinner"
+                size={16}
+                aria-hidden
+              />
+            )}
+            {!loading && selectedOption && !disabled && (
+              <button
+                type="button"
+                className="mui-autocomplete-clear"
+                onClick={handleClear}
+                aria-label="Clear selection"
+                tabIndex={-1}
+              >
+                <X size={14} aria-hidden />
+              </button>
+            )}
+            <ChevronDown
+              size={18}
+              className={
+                isOpen
+                  ? "mui-autocomplete-chevron mui-autocomplete-chevron-open"
+                  : "mui-autocomplete-chevron"
+              }
+              aria-hidden
             />
-          )}
-
-          <span className="mui-selectfield-arrow" aria-hidden>
-            <svg
-              focusable="false"
-              viewBox="0 0 24 24"
-              width="24"
-              height="24"
-              fill="currentColor"
-            >
-              <path d="M7 10l5 5 5-5z" />
-            </svg>
           </span>
 
           {variant === "outlined" && (
-            <fieldset aria-hidden className="mui-selectfield-outline">
-              <legend className="mui-selectfield-outline-legend">
+            <fieldset
+              aria-hidden
+              className="mui-autocomplete-outline"
+            >
+              <legend className="mui-autocomplete-outline-legend">
                 {shrinkLabel && label ? (
                   <span>
                     {label}
                     {required && " *"}
                   </span>
                 ) : (
-                  <span className="mui-selectfield-outline-legend-empty" />
+                  <span className="mui-autocomplete-outline-legend-empty" />
                 )}
               </legend>
             </fieldset>
           )}
         </div>
 
-        {helperText && (
-          <p id={helperId} className="mui-selectfield-helper">
-            {helperText}
+        {displayHelperText && (
+          <p
+            id={helperId}
+            className={
+              hasError
+                ? "mui-autocomplete-helper mui-autocomplete-helper-error"
+                : "mui-autocomplete-helper"
+            }
+          >
+            {hasError && (
+              <AlertCircle size={12} className="mui-autocomplete-helper-icon" />
+            )}
+            {displayHelperText}
           </p>
         )}
 
@@ -525,4 +618,4 @@ const SelectField = forwardRef<HTMLButtonElement, SelectFieldProps>(
   },
 );
 
-export default SelectField;
+export default Autocomplete;

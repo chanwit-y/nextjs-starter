@@ -15,8 +15,10 @@ import Paper from "@/components/common/Paper/Paper";
 import Radio from "@/components/common/Radio/Radio";
 import SelectField from "@/components/common/SelectField/SelectField";
 import TextField from "@/components/common/TextField/TextField";
+import Autocomplete from "@/components/common/Autocomplete/Autocomplete";
 
 import ModalDemo from "@/components/ModalDemo";
+import SnackbarDemo from "@/components/SnackbarDemo";
 
 type SectionProps = {
   id: string;
@@ -218,6 +220,118 @@ export default function Home() {
               options={[
                 { value: "a", label: "Option A" },
                 { value: "b", label: "Option B" },
+              ]}
+            />
+          </SubExample>
+        </Section>
+
+        <Section
+          id="autocomplete"
+          title="Autocomplete"
+          description="Searchable combobox with keyboard navigation and async-ready loading state."
+        >
+          <SubExample label="Basic">
+            <Autocomplete
+              label="Country"
+              placeholder="Select a country"
+              options={[
+                { value: "us", label: "United States" },
+                { value: "th", label: "Thailand" },
+                { value: "jp", label: "Japan" },
+                { value: "fr", label: "France" },
+                { value: "de", label: "Germany" },
+                { value: "br", label: "Brazil" },
+                { value: "au", label: "Australia" },
+              ]}
+            />
+            <Autocomplete
+              label="Framework"
+              defaultValue="next"
+              options={[
+                { value: "next", label: "Next.js" },
+                { value: "remix", label: "Remix" },
+                { value: "astro", label: "Astro" },
+                { value: "nuxt", label: "Nuxt" },
+                { value: "sveltekit", label: "SvelteKit" },
+              ]}
+            />
+          </SubExample>
+
+          <SubExample label="Sizes & states">
+            <Autocomplete
+              size="small"
+              label="Small"
+              options={[
+                { value: "a", label: "Option A" },
+                { value: "b", label: "Option B" },
+              ]}
+            />
+            <Autocomplete
+              label="Disabled"
+              disabled
+              defaultValue="x"
+              options={[{ value: "x", label: "Disabled" }]}
+            />
+            <Autocomplete
+              label="Error"
+              error
+              errorMessage="Please choose one"
+              options={[
+                { value: "a", label: "Option A" },
+                { value: "b", label: "Option B" },
+              ]}
+            />
+            <Autocomplete label="Loading" loading options={[]} />
+          </SubExample>
+
+          <SubExample label="Helper text & required">
+            <Autocomplete
+              label="Role"
+              helperText="Choose your primary role."
+              options={[
+                { value: "eng", label: "Engineer" },
+                { value: "des", label: "Designer" },
+                { value: "pm", label: "Product Manager" },
+              ]}
+            />
+            <Autocomplete
+              label="Department"
+              required
+              placeholder="Select department"
+              options={[
+                { value: "eng", label: "Engineering" },
+                { value: "ops", label: "Operations" },
+                { value: "mkt", label: "Marketing" },
+              ]}
+            />
+          </SubExample>
+
+          <SubExample label="Disabled options">
+            <Autocomplete
+              label="Plan"
+              placeholder="Choose a plan"
+              options={[
+                { value: "free", label: "Free" },
+                { value: "pro", label: "Pro" },
+                {
+                  value: "enterprise",
+                  label: "Enterprise (contact sales)",
+                  disabled: true,
+                },
+              ]}
+            />
+          </SubExample>
+
+          <SubExample label="Full width">
+            <Autocomplete
+              label="Full width"
+              fullWidth
+              placeholder="Spans the available width"
+              options={[
+                { value: "alpha", label: "Alpha" },
+                { value: "beta", label: "Beta" },
+                { value: "gamma", label: "Gamma" },
+                { value: "delta", label: "Delta" },
               ]}
             />
           </SubExample>
@@ -447,6 +561,14 @@ export default function Home() {
           description="Portal-based dialog with backdrop, animations, and nesting."
         >
           <ModalDemo />
+        </Section>
+
+        <Section
+          id="snackbar"
+          title="Snackbar"
+          description="Toast-style notifications with variants, actions, and auto-dismiss."
+        >
+          <SnackbarDemo />
         </Section>
       </div>
     </div>
